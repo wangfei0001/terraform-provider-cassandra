@@ -199,3 +199,21 @@ Represents name of the mbean we are granting access to. Only applicable for reso
 #### mbean_pattern
 
 Represents a pattern, which will grant access to all mbeans which satisfy this pattern. Only works when resource_type is mbeans
+
+## Data Sources
+
+### cassandra_version
+
+Reads the `release_version` reported by `system.local` on the node Terraform connects to.
+
+```java
+data "cassandra_version" "current" {}
+
+output "cassandra_version" {
+  value = data.cassandra_version.current.version
+}
+```
+
+#### version
+
+Computed. The Cassandra release version, e.g. `4.1.12`.

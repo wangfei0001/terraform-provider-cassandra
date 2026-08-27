@@ -29,6 +29,9 @@ func Provider() *schema.Provider {
 			"cassandra_role":     resourceCassandraRole(),
 			"cassandra_grant":    resourceCassandraGrant(),
 		},
+		DataSourcesMap: map[string]*schema.Resource{
+			"cassandra_version": dataSourceCassandraVersion(),
+		},
 		ConfigureFunc: configureProvider,
 		Schema: map[string]*schema.Schema{
 			"username": &schema.Schema{
