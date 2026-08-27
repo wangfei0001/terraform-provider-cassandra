@@ -40,6 +40,10 @@ func dataSourceCassandraVersionRead(d *schema.ResourceData, meta interface{}) er
 
 	var version string
 
+	// host.Version() from iter.Host() is not an option here: it's only
+	// populated via gocql's system.local/system.peers ring-discovery path,
+	// which this provider disables (cluster.DisableInitialHostLookup = true
+	// in provider.go), so it stays zero-value for manually-configured hosts.
 	if err := session.Query(`SELECT release_version FROM system.local`).Scan(&version); err != nil {
 		return err
 	}
