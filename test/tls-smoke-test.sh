@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-CASSANDRA_IMAGE="cassandra:4.1"
+CASSANDRA_IMAGE="cassandra:5.0"
 CQL_PORT=19045
 CONTAINER_NAME="tfp-cassandra-tls-smoke-test"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -59,46 +59,39 @@ echo "==> Enabling PasswordAuthenticator + TLS (client + internode) in cassandra
 sed -i.bak 's/^authenticator:.*/authenticator: PasswordAuthenticator/' cassandra.yaml
 
 python3 - "$WORKDIR/cassandra.yaml" <<'EOF'
+import re
 import sys
+
+# keystore_password/truststore_password are commented out by default in
+# some Cassandra versions (e.g. 5.0) but not others (e.g. 4.1), so the
+# password line is matched with an optional leading '#'.
 path = sys.argv[1]
 content = open(path).read()
 replacements = [
-    ("""  # Set to a valid keystore if internode_encryption is dc, rack or all
-  keystore: conf/.keystore
-  keystore_password: cassandra""",
-     """  # Set to a valid keystore if internode_encryption is dc, rack or all
-  keystore: /keystore.p12
-  keystore_password: cassandra
-  store_type: PKCS12"""),
-    ("""  # Set to a valid trustore if require_client_auth is true
-  truststore: conf/.truststore
-  truststore_password: cassandra""",
-     """  # Set to a valid trustore if require_client_auth is true
-  truststore: /truststore.p12
-  truststore_password: cassandra"""),
-    ("""client_encryption_options:
-  # Enable client-to-server encryption
-  enabled: false""",
-     """client_encryption_options:
-  # Enable client-to-server encryption
-  enabled: true
-  store_type: PKCS12"""),
-    ("""  # Set keystore and keystore_password to valid keystores if enabled is true
-  keystore: conf/.keystore
-  keystore_password: cassandra""",
-     """  # Set keystore and keystore_password to valid keystores if enabled is true
-  keystore: /keystore.p12
-  keystore_password: cassandra"""),
-    ("""  # Set trustore and truststore_password if require_client_auth is true
-  # truststore: conf/.truststore
-  # truststore_password: cassandra""",
-     """  # Set trustore and truststore_password if require_client_auth is true
-  truststore: /truststore.p12
-  truststore_password: cassandra"""),
+    (r"(  # Set to a valid keystore if internode_encryption is dc, rack or all\n"
+     r"  keystore: )conf/\.keystore\n"
+     r"  #?keystore_password: cassandra\n",
+     r"\g<1>/keystore.p12\n  keystore_password: cassandra\n  store_type: PKCS12\n"),
+    (r"(  # Set to a valid trustore if require_client_auth is true\n"
+     r"  truststore: )conf/\.truststore\n"
+     r"  #?truststore_password: cassandra\n",
+     r"\g<1>/truststore.p12\n  truststore_password: cassandra\n"),
+    (r"(client_encryption_options:\n"
+     r"  # Enable client-to-server encryption\n"
+     r"  enabled: )false\n",
+     r"\g<1>true\n  store_type: PKCS12\n"),
+    (r"(  # Set keystore and keystore_password to valid keystores if enabled is true\n"
+     r"  keystore: )conf/\.keystore\n"
+     r"  #?keystore_password: cassandra\n",
+     r"\g<1>/keystore.p12\n  keystore_password: cassandra\n"),
+    (r"(  # Set trustore and truststore_password if require_client_auth is true\n)"
+     r"  # ?truststore: conf/\.truststore\n"
+     r"  # ?truststore_password: cassandra\n",
+     r"\g<1>  truststore: /truststore.p12\n  truststore_password: cassandra\n"),
 ]
-for old, new in replacements:
-    assert content.count(old) == 1, f"pattern not found (cassandra.yaml format may have changed): {old[:60]!r}"
-    content = content.replace(old, new, 1)
+for pattern, repl in replacements:
+    content, count = re.subn(pattern, repl, content, count=1)
+    assert count == 1, f"pattern not found (cassandra.yaml format may have changed): {pattern[:60]!r}"
 open(path, "w").write(content)
 EOF
 
